@@ -6,6 +6,8 @@
 #include <GameFramework/SpringArmComponent.h>
 #include <Camera/CameraComponent.h>
 #include <Blueprint/UserWidget.h>
+#include <Kismet/GameplayStatics.h>
+#include "EnemyFSM.h"
 
 // Sets default values
 ATPSPlayer::ATPSPlayer()
@@ -75,7 +77,12 @@ void ATPSPlayer::BeginPlay()
 	
 	// 1. 스나이퍼 UI 위젯 인스턴스 생성
 	_sniperUI = CreateWidget(GetWorld(), sniperUIFactory);
+	// 2. 일반 조준 UI 크로스헤어 인스턴스 생성
+	_crosshairUI = CreateWidget(GetWorld(), crosshairUIFactory);
+	// 3. 일반 조준 UI등록
+	_crosshairUI->AddToViewport();
 
+	// 기보능로 스나이퍼건을 사용하도록 설정
 	ChangeToSniperGun();
 }
 
@@ -142,9 +149,52 @@ void ATPSPlayer::Move()
 
 void ATPSPlayer::InputFire()
 {
-	// 총알 발사 처리
-	FTransform firePosition = gunMeshComp->GetSocketTransform(TEXT("FirePosition"));
-	GetWorld()->SpawnActor<ABullet>(bulletFactory, firePosition);
+	if (bUsingGrenadeGun) {
+		// 총알 발사 처리
+		FTransform firePosition = gunMeshComp->GetSocketTransform(TEXT("FirePosition"));
+		GetWorld()->SpawnActor<ABullet>(bulletFactory, firePosition);
+	}
+	else {
+		// 스나이퍼건 사용시
+		// LineTrace의 시작 위치
+		FVector startPos = tpsCamComp->GetComponentLocation();
+		// LineTrace의 종료 위치
+		FVector endPos = tpsCamComp->GetComponentLocation() + tpsCamComp->GetForwardVector() * 5000;
+		// LineTrace의 충돌 정보를 담을 변수
+		FHitResult hitInfo;
+		// 충돌 옵션 설정 변수
+		FCollisionQueryParams params;
+		// 자기 자신은 충돌에서 제외
+		params.AddIgnoredActor(this);
+		// Channel 필터를 이용한 LineTrace 충돌 검출(충돌 정보, 시작 위치, 종료 위치, 검출 채널, 충돌 옵션)
+		bool bHit = GetWorld()->LineTraceSingleByChannel(hitInfo, startPos, endPos, ECC_Visibility, params);
+		// LineTrace가 부딪혔을 때
+		if (bHit) {
+			// 총알 파편 효과 트랜스폼
+			FTransform bulletTrans;
+			// 부딪힌 위치 할당
+			bulletTrans.SetLocation(hitInfo.ImpactPoint);
+			// 총알 파편 효과 인스턴스 생성
+			UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), bulletEffectFactory, bulletTrans);
+
+			auto hitComp = hitInfo.GetComponent();
+			// 1. 만약 컴포넌트에 물리가 적용되어 있다면
+			if (hitComp && hitComp->IsSimulatingPhysics())
+			{
+				// 2. 날려버릴 힘과 방향이 필요
+				FVector force = -hitInfo.ImpactNormal * hitComp->GetMass() * 500000;
+				// 3. 그 방향으로 날려버리고 싶다.
+				hitComp->AddForce(force);
+			}
+
+			// 부딪힌 대상이 적인지 판단하기
+			auto enemy = hitInfo.GetActor()->GetDefaultSubobjectByName(TEXT("FSM"));
+			if (enemy) {
+				auto enemyFSM = Cast<UEnemyFSM>(enemy);
+				enemyFSM->OnDamageProcess();
+			}
+		}
+	}
 }
 
 void ATPSPlayer::ChangeToGrenadeGun()
@@ -175,6 +225,8 @@ void ATPSPlayer::SniperAim()
 		_sniperUI->AddToViewport();
 		// 3. 카메라의 시야각 Field Of View 설정
 		tpsCamComp->SetFieldOfView(45.0f);
+		// 4.일반 조준 ui 제거
+		_crosshairUI->RemoveFromParent();
 	}
 	else {
 		// 1. 스나이퍼 조준 모드 비활성화
@@ -183,6 +235,8 @@ void ATPSPlayer::SniperAim()
 		_sniperUI->RemoveFromParent();
 		// 3. 카메라 시야각 원래대로 복원
 		tpsCamComp->SetFieldOfView(90.0f);
+		// 4. 일반 조준 UI등록
+		_crosshairUI->AddToViewport();
 	}
 }
 
