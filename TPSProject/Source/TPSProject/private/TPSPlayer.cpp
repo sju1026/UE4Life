@@ -57,9 +57,8 @@ ATPSPlayer::ATPSPlayer()
 
 	// 5. 스나이퍼건 컴포넌트 등록
 	sniperGunComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SniperGunComp"));
-	sniperGunComp->SetupAttachment(GetMesh(), TEXT("hand_rSocket"));
 	// 5-1. 부모 컴포넌트를 Mesh 컴포넌트로 등록
-	sniperGunComp->SetupAttachment(GetMesh());
+	sniperGunComp->SetupAttachment(GetMesh(), TEXT("hand_rSocket"));
 	// 5-2. 스태틱메시 데이터 로드
 	ConstructorHelpers::FObjectFinder<UStaticMesh>TempSniperMesh(TEXT("StaticMesh'/Game/SniperGun/sniper1.sniper1'"));
 	// 5-3. 데이터로드가 성공했다면

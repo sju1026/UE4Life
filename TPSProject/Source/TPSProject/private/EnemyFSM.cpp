@@ -7,6 +7,9 @@
 #include <Kismet/GameplayStatics.h>
 #include "TPSProject.h"
 #include <Components/CapsuleComponent.h>
+#include "EnemyAnim.h"
+#include <AIController.h>
+#include <NavigationSystem.h>
 
 // Sets default values for this component's properties
 UEnemyFSM::UEnemyFSM()
@@ -17,7 +20,6 @@ UEnemyFSM::UEnemyFSM()
 
 	// ...
 }
-
 
 // Called when the game starts
 void UEnemyFSM::BeginPlay()
@@ -30,8 +32,13 @@ void UEnemyFSM::BeginPlay()
 	target = Cast<ATPSPlayer>(actor);
 	// 소유 객체 가져오기
 	me = Cast<AEnemy>(GetOwner());
-}
 
+	// UEnemyAnim* 할당
+	anim = Cast<UEnemyAnim>(me->GetMesh()->GetAnimInstance());
+
+	// AAIContoller 할당하기
+	ai = Cast<AAIController>(me->GetController());
+}
 
 // Called every frame
 void UEnemyFSM::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -68,6 +75,11 @@ void UEnemyFSM::IdleState()
 		mState = EEnemyState::Move;
 		// 경과시간 초기화
 		currentTime = 0;
+
+		// 애니메이션 상태 동기화
+		anim->animState = mState;
+		// 최초 랜덤한 위치 정해주기
+		GetRandomPositionInNavMesh(me->GetActorLocation(), 500, randomPos);
 	}
 }
 
@@ -78,13 +90,49 @@ void UEnemyFSM::MoveState()
 	// 2. 방향이 필요하다
 	FVector dir = destination - me->GetActorLocation();
 	// 3. 방향으로 이동한다
-	me->AddMovementInput(dir.GetSafeNormal());
+	//me->AddMovementInput(dir.GetSafeNormal());
+	//ai->MoveToLocation(destination);
+
+	// NavigationSystem 객체 얻어오기
+	auto ns = UNavigationSystemV1::GetNavigationSystem(GetWorld());
+
+	// 목적지 길 찾기 경로 데이터 검색
+	FPathFindingQuery query;
+	FAIMoveRequest req;
+	// 목적지에서 인지할 수 있는 범위
+	req.SetAcceptanceRadius(3);
+	req.SetGoalLocation(destination);
+	//길 찾기를 위한 쿼리 생성
+	ai->BuildPathfindingQuery(req, query);
+	// 길 찾기 결과 가져오기
+	FPathFindingResult r = ns->FindPathSync(query);
+	// 목적지까지의 길 찾기 성공 여부 확인
+	if (r.Result == ENavigationQueryResult::Success) {
+		ai->MoveToLocation(destination);
+	}
+	else {
+		// 랜덤 위치로 이동
+		auto result = ai->MoveToLocation(randomPos);
+		//목적지에 도착하면
+		if (result == EPathFollowingRequestResult::AlreadyAtGoal) {
+			// 새로운 랜덤 위치 가져오기
+			GetRandomPositionInNavMesh(me->GetActorLocation(), 500, randomPos);
+		}
+	}
 
 	// 타깃과 가까워지면 공격 상태로 전환
 	// 1. 만약 거리가 공격 범위 ㅏㅇㄴ에 들어오면
 	if (dir.Size() < attackRange) {
+		// 길 찾기 기능 정지
+		ai->StopMovement();
 		// 2. 공격 상태로 전환하고 싶다
 		mState = EEnemyState::Attack;
+		// 애니메이션 상태 동기화
+		anim->animState = mState;
+		// 공격 애니메이션 재생 활성화
+		anim->bAttackPlay = true;
+		// 공격 상태 전환 시 대기시간이 바로 끝나도록 처리
+		currentTime = attackDelayTime;
 	}
 }
 
@@ -99,6 +147,7 @@ void UEnemyFSM::AttackState()
 		PRINT_LOG(TEXT("Attack!!!"));
 		// 경과 시간 초과
 		currentTime = 0;
+		anim->bAttackPlay = true;
 	}
 
 	// 목표 : 타깃이 공격버무이를 벗어나면 상태를 이동으로 전환
@@ -107,6 +156,10 @@ void UEnemyFSM::AttackState()
 	// 2. 타깃과의 거리가 공격 범위를 벗어났으니까
 	if (distance > attackRange) {
 		mState = EEnemyState::Move;
+		// 애니메이션 상태 동기화
+		anim->animState = mState;
+
+		GetRandomPositionInNavMesh(me->GetActorLocation(), 500, randomPos);
 	}
 }
 
@@ -120,11 +173,19 @@ void UEnemyFSM::DamageState()
 		mState = EEnemyState::Idle;
 		// 경과 시간 초과
 		currentTime = 0;
+		// 애니메이션 상태 동기화
+		anim->animState = mState;
 	}
 }
 
 void UEnemyFSM::DieState()
 {
+	// 아직 죽음 애니메이션이 끝나지 않았다면
+	// 바닥 내려가지 않도록 처리
+	if (anim->bDieDone == false) {
+		return;
+	}
+
 	// 계속 아래로 내려가고 싶다
 	// 등속운동 공식 P = P0 + vt
 	FVector P0 = me->GetActorLocation();
@@ -146,12 +207,33 @@ void UEnemyFSM::OnDamageProcess()
 	if (hp > 0) {
 		// 상태를 피격으로 전환
 		mState = EEnemyState::Damage;
+
+		currentTime = 0;
+
+		// 피격 애니메이션 재생
+		int32 index = FMath::RandRange(0, 1);
+		FString sectionName = FString::Printf(TEXT("Damage%d"), 0);
+		anim->PlayDamageAnim(FName(*sectionName));
 	}
 	// 그렇지 않다면
 	else {
 		mState = EEnemyState::Die;
 		// 캡슐 충돌체 비활성화
 		me->GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		// 죽음 애니메이션 재생
+		anim->PlayDamageAnim(TEXT("Die"));
 	}
+	// 애니메이션 동기화
+	anim->animState = mState;
+	ai->StopMovement();
+}
+
+bool UEnemyFSM::GetRandomPositionInNavMesh(FVector centerLocatoin, float radius, FVector& dest)
+{
+	auto ns = UNavigationSystemV1::GetNavigationSystem(GetWorld());
+	FNavLocation loc;
+	bool result = ns->GetRandomReachablePointInRadius(centerLocatoin, radius, loc);
+	dest = loc.Location;
+	return result;
 }
 

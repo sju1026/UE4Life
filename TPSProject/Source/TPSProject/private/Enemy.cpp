@@ -12,7 +12,7 @@ AEnemy::AEnemy()
 
 	// 1. 스켈레탈메시 데이터 로드
 	ConstructorHelpers::FObjectFinder<USkeletalMesh>tempMesh(
-		TEXT("SkeletalMesh'/Game/Mannequin/Character/Mesh/SK_Mannequin_Female.SK_Mannequin_Female'"));
+		TEXT("SkeletalMesh'/Game/Enemy/Model/vampire_a_lusth.vampire_a_lusth'"));
 
 	// 1-1. 데이터 로드 성공하면
 	if (tempMesh.Succeeded()) {
@@ -20,10 +20,19 @@ AEnemy::AEnemy()
 		GetMesh()->SetSkeletalMesh(tempMesh.Object);
 		// 1-3. 메시 위치 및 회전 설정
 		GetMesh()->SetRelativeLocationAndRotation(FVector(0, 0, -88), FRotator(0, -90, 0));
+		// 1-4. 메시 크기 수정
+		GetMesh()->SetRelativeScale3D(FVector(0.84f));
 	}
 
 	// EnemyFSM 컴포넌트 추가
 	fsm = CreateDefaultSubobject<UEnemyFSM>(TEXT("FSM"));
+
+	// 애니메이션 블루프린트 할당하기
+	ConstructorHelpers::FClassFinder<UAnimInstance>tempClass(
+		TEXT("AnimBlueprint'/Game/_My/Animations/ABP_Enemy.ABP_Enemy_C'"));
+	if (tempClass.Succeeded()) {
+		GetMesh()->SetAnimInstanceClass(tempClass.Class);
+	}
 }
 
 // Called when the game starts or when spawned
