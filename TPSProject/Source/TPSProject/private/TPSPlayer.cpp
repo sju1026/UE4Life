@@ -10,6 +10,7 @@
 #include <GameFramework/CharacterMovementComponent.h>
 #include "EnemyFSM.h"
 #include "PlayerAnim.h"
+#include "PlayerMove.h"
 
 // Sets default values
 ATPSPlayer::ATPSPlayer()
@@ -77,15 +78,14 @@ ATPSPlayer::ATPSPlayer()
 	if (tempSound.Succeeded()) {
 		bulletSound = tempSound.Object;
 	}
+
+	playerMove = CreateDefaultSubobject<UPlayerMove>(TEXT("PlayerMove"));
 }
 
 // Called when the game starts or when spawned
 void ATPSPlayer::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	// 초기 속도를 걷기로 지정
-	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
 
 	// 1. 스나이퍼 UI 위젯 인스턴스 생성
 	_sniperUI = CreateWidget(GetWorld(), sniperUIFactory);
@@ -102,8 +102,6 @@ void ATPSPlayer::BeginPlay()
 void ATPSPlayer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	Move();
 }
 
 // Called to bind functionality to input
@@ -111,54 +109,15 @@ void ATPSPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	PlayerInputComponent->BindAxis("Turn", this, &ATPSPlayer::Turn);
-	PlayerInputComponent->BindAxis("LookUp", this, &ATPSPlayer::LookUp);
-	PlayerInputComponent->BindAxis("Horizontal", this, &ATPSPlayer::InputHorizontal);
-	PlayerInputComponent->BindAxis("Vertical", this, &ATPSPlayer::InputVertical);
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ATPSPlayer::InputJump);
+	// 컴포넌트에서 입력 바인딩 처리하도록 호출
+	playerMove->SetupInputBinding(PlayerInputComponent);
+
+
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &ATPSPlayer::InputFire);
 	PlayerInputComponent->BindAction("GrenadeGun", IE_Pressed, this, &ATPSPlayer::ChangeToGrenadeGun);
 	PlayerInputComponent->BindAction("SniperGun", IE_Pressed, this, &ATPSPlayer::ChangeToSniperGun);
 	PlayerInputComponent->BindAction("Sniper", IE_Pressed, this, &ATPSPlayer::SniperAim);
 	PlayerInputComponent->BindAction("Sniper", IE_Released, this, &ATPSPlayer::SniperAim);
-	PlayerInputComponent->BindAction("Run", IE_Pressed, this, &ATPSPlayer::InputRun);
-	PlayerInputComponent->BindAction("Run", IE_Released, this, &ATPSPlayer::InputRun);
-}
-
-void ATPSPlayer::Turn(float value)
-{
-	AddControllerYawInput(value);
-}
-
-void ATPSPlayer::LookUp(float value)
-{
-	AddControllerPitchInput(value);
-}
-
-void ATPSPlayer::InputHorizontal(float value)
-{
-	direction.X = value;
-}
-
-void ATPSPlayer::InputVertical(float value)
-{
-	direction.Y = value;
-}
-
-void ATPSPlayer::InputJump()
-{
-	Jump();
-}
-
-void ATPSPlayer::Move()
-{
-	direction = FTransform(GetControlRotation()).TransformVector(direction);
-	/*FVector P0 = GetActorLocation();
-	FVector vt = direction * walkSpeed * DeltaTime;
-	FVector P = P0 + vt;
-	SetActorLocation(P);*/
-	AddMovementInput(direction);
-	direction = FVector::ZeroVector;
 }
 
 void ATPSPlayer::InputFire()
@@ -260,18 +219,6 @@ void ATPSPlayer::SniperAim()
 		tpsCamComp->SetFieldOfView(90.0f);
 		// 4. 일반 조준 UI등록
 		_crosshairUI->AddToViewport();
-	}
-}
-
-void ATPSPlayer::InputRun()
-{
-	auto movement = GetCharacterMovement();
-	// 현재 달리기 모드라면
-	if (movement->MaxWalkSpeed > walkSpeed) {
-		movement->MaxWalkSpeed = walkSpeed;
-	}
-	else {
-		movement->MaxWalkSpeed = runSpeed;
 	}
 }
 
