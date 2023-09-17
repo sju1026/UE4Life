@@ -6,12 +6,17 @@
 #include "GameFramework/Character.h"
 #include "TPSPlayer.generated.h"
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FInputBindingDelegate, class UInputComponent*);
+
 UCLASS()
 class TPSPROJECT_API ATPSPlayer : public ACharacter
 {
 	GENERATED_BODY()
 
 public:
+	// 입력 바인딩 델리게이트
+	FInputBindingDelegate onInputBindingDelegate;
+
 	// Sets default values for this character's properties
 	ATPSPlayer();
 
@@ -29,60 +34,19 @@ public:
 public:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 		class USpringArmComponent* springArmComp;
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera)
 		class UCameraComponent* tpsCamComp;
 
-	
-
+	// 총 스켈레탈메쉬
 	UPROPERTY(VisibleAnywhere, Category = GunMesh)
 		class USkeletalMeshComponent* gunMeshComp;
 
-	UPROPERTY(EditDefaultsOnly, Category = BulletFactory)
-		TSubclassOf<class ABullet> bulletFactory;
-
-	void InputFire();
-
-	// 스나이퍼 건 스태틱메시 추가
+	// 스나이퍼건 스테틱메쉬 추가
 	UPROPERTY(VisibleAnywhere, Category = GunMesh)
-		class UStaticMeshComponent* sniperGunComp; 
-
-	// 유탄총 사용 중인지 여부
-	bool bUsingGrenadeGun = true;
-	// 유탄총으로 변경
-	void ChangeToGrenadeGun();
-	// 스나이퍼건으로 변경
-	void ChangeToSniperGun();
-
-	// 스나이퍼 조준
-	void SniperAim();
-	// 스나이퍼 조준 중인지 여부
-	bool bSniperAim = false;
-
-	// 스나이퍼 UI 위젯 공장
-	UPROPERTY(EditDefaultsOnly, Category = SniperUI)
-		TSubclassOf<class UUserWidget> sniperUIFactory;
-	// 스나이퍼 UI 위젯 인스턴스
-	class UUserWidget* _sniperUI;
-
-	/// 총알파편효과공장
-	UPROPERTY(EditAnywhere, Category = BulletFactory)
-		class UParticleSystem* bulletEffectFactory;
-
-	UPROPERTY(EditDefaultsOnly, Category = SniperUI)
-		TSubclassOf<class UUserWidget> crosshairUIFactory;
-
-	class UUserWidget* _crosshairUI;
-
-	// 카메라 세이크 블루프린트를 저장할 변수
-	UPROPERTY(EditDefaultsOnly, Category = CameraMotion)
-		TSubclassOf<class UCameraShakeBase> cameraShake;
-
-	// 총알 발사 사운드
-	UPROPERTY(EditDefaultsOnly, Category = Sound)
-		class USoundBase* bulletSound;
-
+		class UStaticMeshComponent* sniperGunComp;
 public:
 	UPROPERTY(VisibleAnywhere, Category = Component)
-		class UPlayerMove* playerMove;
+		class UPlayerBaseComponent* playerMove;
+	UPROPERTY(VisibleAnywhere, Category = Component)
+		class UPlayerBaseComponent* playerFire;
 };
